@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Geocoding Tool</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 1.25rem 1.5rem;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    header p {
+      font-size: 0.82rem;
+      color: #aaa;
+      margin-top: 0.2rem;
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      grid-template-rows: 1fr;
+      max-height: calc(100vh - 64px);
+    }
+
+    /* ── Left panel ── */
+    .panel {
+      background: #fff;
+      border-right: 1px solid #ddd;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .search-area {
+      padding: 1.25rem;
+      border-bottom: 1px solid #eee;
+    }
+
+    .search-area label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    #address-input {
+      flex: 1;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #address-input:focus {
+      border-color: #4f6ef7;
+    }
+
+    #search-btn {
+      padding: 0.6rem 1rem;
+      background: #4f6ef7;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+
+    #search-btn:hover { background: #3a57d9; }
+    #search-btn:disabled { background: #a0aee8; cursor: not-allowed; }
+
+    .batch-toggle {
+      margin-top: 0.75rem;
+    }
+
+    .batch-toggle button {
+      font-size: 0.78rem;
+      color: #4f6ef7;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+    }
+
+    #batch-area {
+      display: none;
+      margin-top: 0.75rem;
+    }
+
+    #batch-area.visible { display: block; }
+
+    #batch-input {
+      width: 100%;
+      height: 90px;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      resize: vertical;
+      outline: none;
+    }
+
+    #batch-input:focus { border-color: #4f6ef7; }
+
+    #batch-btn {
+      margin-top: 0.5rem;
+      width: 100%;
+      padding: 0.55rem;
+      background: #4f6ef7;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #batch-btn:hover { background: #3a57d9; }
+
+    /* ── Results list ── */
+    .results-header {
+      padding: 0.75rem 1.25rem 0.5rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #clear-btn {
+      font-size: 0.75rem;
+      color: #e05252;
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: none;
+    }
+
+    #clear-btn.visible { display: block; }
+
+    #results-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 0.75rem 1rem;
+    }
+
+    .result-card {
+      background: #f9f9fb;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      margin-bottom: 0.6rem;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .result-card:hover, .result-card.active {
+      border-color: #4f6ef7;
+      box-shadow: 0 0 0 2px rgba(79,110,247,0.15);
+    }
+
+    .result-card .query {
+      font-size: 0.78rem;
+      color: #888;
+      margin-bottom: 0.25rem;
+    }
+
+    .result-card .display-name {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #222;
+      margin-bottom: 0.5rem;
+      line-height: 1.3;
+    }
+
+    .coords-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .coord-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      background: #eef0fe;
+      border-radius: 4px;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.8rem;
+      font-family: monospace;
+      color: #333;
+    }
+
+    .coord-chip .label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #4f6ef7;
+      font-family: sans-serif;
+    }
+
+    .copy-row {
+      margin-top: 0.5rem;
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .copy-btn {
+      font-size: 0.72rem;
+      color: #4f6ef7;
+      background: none;
+      border: 1px solid #c5cdf9;
+      border-radius: 4px;
+      padding: 0.2rem 0.5rem;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .copy-btn:hover { background: #eef0fe; }
+
+    .copy-btn.copied {
+      color: #2eaa6a;
+      border-color: #a3d9bf;
+      background: #f0faf5;
+    }
+
+    .error-card {
+      background: #fff5f5;
+      border: 1px solid #f5c5c5;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.6rem;
+      font-size: 0.85rem;
+      color: #c44;
+    }
+
+    .error-card .eq { font-size: 0.75rem; color: #888; }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #bbb;
+      font-size: 0.88rem;
+    }
+
+    .empty-state svg {
+      display: block;
+      margin: 0 auto 0.75rem;
+      opacity: 0.35;
+    }
+
+    /* ── Map ── */
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Export bar ── */
+    .export-bar {
+      padding: 0.6rem 1.25rem;
+      border-top: 1px solid #eee;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .export-btn {
+      font-size: 0.78rem;
+      padding: 0.35rem 0.7rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background: #fff;
+      cursor: pointer;
+      transition: background 0.1s;
+      color: #444;
+    }
+
+    .export-btn:hover { background: #f0f0f0; }
+
+    @media (max-width: 700px) {
+      main {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 320px;
+        max-height: none;
+      }
+      .panel { max-height: 60vh; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Geocoding Tool</h1>
+  <p>Convert addresses to latitude &amp; longitude coordinates using OpenStreetMap Nominatim</p>
+</header>
+
+<main>
+  <!-- Left panel -->
+  <div class="panel">
+    <div class="search-area">
+      <label for="address-input">Address</label>
+      <div class="input-row">
+        <input id="address-input" type="text" placeholder="e.g. 1600 Pennsylvania Ave, Washington DC" autocomplete="off" />
+        <button id="search-btn">Search</button>
+      </div>
+
+      <div class="batch-toggle">
+        <button id="toggle-batch">Batch geocode multiple addresses</button>
+      </div>
+
+      <div id="batch-area">
+        <textarea id="batch-input" placeholder="One address per line:&#10;Empire State Building, NY&#10;Golden Gate Bridge, CA&#10;Big Ben, London"></textarea>
+        <button id="batch-btn">Geocode All</button>
+      </div>
+    </div>
+
+    <div class="results-header">
+      <span>Results</span>
+      <button id="clear-btn">Clear all</button>
+    </div>
+
+    <div id="results-list">
+      <div class="empty-state">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        Search an address to see results
+      </div>
+    </div>
+
+    <div class="export-bar">
+      <button class="export-btn" id="export-csv">Export CSV</button>
+      <button class="export-btn" id="export-json">Export JSON</button>
+    </div>
+  </div>
+
+  <!-- Map -->
+  <div id="map"></div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // ── Map setup ──────────────────────────────────────────────────────────────
+  const map = L.map('map').setView([20, 0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  }).addTo(map);
+
+  const markers = L.featureGroup().addTo(map);
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let results = []; // { id, query, data | error }
+  let activeId = null;
+
+  // ── DOM refs ───────────────────────────────────────────────────────────────
+  const addressInput = document.getElementById('address-input');
+  const searchBtn    = document.getElementById('search-btn');
+  const toggleBatch  = document.getElementById('toggle-batch');
+  const batchArea    = document.getElementById('batch-area');
+  const batchInput   = document.getElementById('batch-input');
+  const batchBtn     = document.getElementById('batch-btn');
+  const resultsList  = document.getElementById('results-list');
+  const clearBtn     = document.getElementById('clear-btn');
+  const exportCsv    = document.getElementById('export-csv');
+  const exportJson   = document.getElementById('export-json');
+
+  // ── Batch toggle ───────────────────────────────────────────────────────────
+  toggleBatch.addEventListener('click', () => {
+    batchArea.classList.toggle('visible');
+    toggleBatch.textContent = batchArea.classList.contains('visible')
+      ? 'Hide batch mode'
+      : 'Batch geocode multiple addresses';
+  });
+
+  // ── Geocoding ──────────────────────────────────────────────────────────────
+  async function geocode(query) {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=1&addressdetails=1`;
+    const res = await fetch(url, {
+      headers: { 'Accept-Language': 'en', 'User-Agent': 'geocoding-tool-demo/1.0' }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.length) throw new Error('No results found');
+    return data[0];
+  }
+
+  function addResult(query, data, error) {
+    const id = Date.now() + Math.random();
+    results.unshift({ id, query, data, error });
+    renderResults();
+    if (data) focusResult(id);
+  }
+
+  // ── Single search ──────────────────────────────────────────────────────────
+  async function doSearch() {
+    const q = addressInput.value.trim();
+    if (!q) return;
+
+    searchBtn.disabled = true;
+    searchBtn.innerHTML = '<span class="spinner"></span>Searching…';
+
+    try {
+      const data = await geocode(q);
+      addResult(q, data, null);
+    } catch (err) {
+      addResult(q, null, err.message);
+    } finally {
+      searchBtn.disabled = false;
+      searchBtn.textContent = 'Search';
+      addressInput.value = '';
+    }
+  }
+
+  searchBtn.addEventListener('click', doSearch);
+  addressInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+  // ── Batch search ───────────────────────────────────────────────────────────
+  batchBtn.addEventListener('click', async () => {
+    const lines = batchInput.value.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return;
+
+    batchBtn.disabled = true;
+    batchBtn.innerHTML = `<span class="spinner"></span>0 / ${lines.length}`;
+
+    for (let i = 0; i < lines.length; i++) {
+      const q = lines[i];
+      batchBtn.innerHTML = `<span class="spinner"></span>${i + 1} / ${lines.length}`;
+      try {
+        const data = await geocode(q);
+        addResult(q, data, null);
+      } catch (err) {
+        addResult(q, null, err.message);
+      }
+      // Nominatim rate limit: 1 req/s
+      if (i < lines.length - 1) await delay(1100);
+    }
+
+    batchBtn.disabled = false;
+    batchBtn.textContent = 'Geocode All';
+    batchInput.value = '';
+  });
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  function renderResults() {
+    clearBtn.classList.toggle('visible', results.length > 0);
+
+    if (!results.length) {
+      resultsList.innerHTML = `
+        <div class="empty-state">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          Search an address to see results
+        </div>`;
+      markers.clearLayers();
+      return;
+    }
+
+    resultsList.innerHTML = results.map(r => r.error ? renderError(r) : renderCard(r)).join('');
+
+    // Re-bind card clicks
+    resultsList.querySelectorAll('.result-card').forEach(el => {
+      el.addEventListener('click', () => focusResult(el.dataset.id));
+    });
+
+    // Re-bind copy buttons
+    resultsList.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const text = btn.dataset.copy;
+        navigator.clipboard.writeText(text).then(() => {
+          btn.textContent = 'Copied!';
+          btn.classList.add('copied');
+          setTimeout(() => { btn.textContent = btn.dataset.label; btn.classList.remove('copied'); }, 1500);
+        });
+      });
+    });
+
+    rebuildMarkers();
+  }
+
+  function renderCard(r) {
+    const { id, query, data } = r;
+    const lat = parseFloat(data.lat).toFixed(6);
+    const lon = parseFloat(data.lon).toFixed(6);
+    const active = id == activeId ? 'active' : '';
+    return `
+      <div class="result-card ${active}" data-id="${id}">
+        <div class="query">Query: ${esc(query)}</div>
+        <div class="display-name">${esc(data.display_name)}</div>
+        <div class="coords-row">
+          <div class="coord-chip"><span class="label">LAT</span>${lat}</div>
+          <div class="coord-chip"><span class="label">LON</span>${lon}</div>
+          ${data.type ? `<div class="coord-chip"><span class="label">TYPE</span>${esc(data.type)}</div>` : ''}
+        </div>
+        <div class="copy-row">
+          <button class="copy-btn" data-copy="${lat}, ${lon}" data-label="Copy lat, lon">Copy lat, lon</button>
+          <button class="copy-btn" data-copy="${lon}, ${lat}" data-label="Copy lon, lat">Copy lon, lat</button>
+          <button class="copy-btn" data-copy="${lat}" data-label="Copy lat">Copy lat</button>
+          <button class="copy-btn" data-copy="${lon}" data-label="Copy lon">Copy lon</button>
+        </div>
+      </div>`;
+  }
+
+  function renderError(r) {
+    return `
+      <div class="error-card">
+        <div class="eq">Query: ${esc(r.query)}</div>
+        ${esc(r.error)}
+      </div>`;
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Map markers ────────────────────────────────────────────────────────────
+  function rebuildMarkers() {
+    markers.clearLayers();
+    results.filter(r => r.data).forEach(r => {
+      const lat = parseFloat(r.data.lat);
+      const lon = parseFloat(r.data.lon);
+      const marker = L.marker([lat, lon])
+        .bindPopup(`<strong>${r.data.display_name}</strong><br/>${lat.toFixed(6)}, ${lon.toFixed(6)}`)
+        .addTo(markers);
+      marker._resultId = r.id;
+    });
+  }
+
+  function focusResult(id) {
+    activeId = id;
+    const r = results.find(r => r.id == id);
+    if (!r || !r.data) return;
+
+    // Highlight card
+    resultsList.querySelectorAll('.result-card').forEach(el => {
+      el.classList.toggle('active', el.dataset.id == id);
+    });
+
+    // Pan map
+    const lat = parseFloat(r.data.lat);
+    const lon = parseFloat(r.data.lon);
+    map.setView([lat, lon], 14, { animate: true });
+
+    // Open popup
+    markers.eachLayer(m => {
+      if (m._resultId == id) m.openPopup();
+    });
+  }
+
+  // ── Clear ──────────────────────────────────────────────────────────────────
+  clearBtn.addEventListener('click', () => {
+    results = [];
+    activeId = null;
+    renderResults();
+    map.setView([20, 0], 2);
+  });
+
+  // ── Export ─────────────────────────────────────────────────────────────────
+  exportCsv.addEventListener('click', () => {
+    const rows = [['query', 'display_name', 'latitude', 'longitude', 'type', 'osm_id', 'error']];
+    results.forEach(r => {
+      if (r.data) {
+        rows.push([r.query, r.data.display_name, r.data.lat, r.data.lon, r.data.type || '', r.data.osm_id || '', '']);
+      } else {
+        rows.push([r.query, '', '', '', '', '', r.error]);
+      }
+    });
+    const csv = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+    download('geocoding-results.csv', 'text/csv', csv);
+  });
+
+  exportJson.addEventListener('click', () => {
+    const out = results.map(r => r.data
+      ? { query: r.query, display_name: r.data.display_name, latitude: r.data.lat, longitude: r.data.lon, type: r.data.type, osm_id: r.data.osm_id }
+      : { query: r.query, error: r.error }
+    );
+    download('geocoding-results.json', 'application/json', JSON.stringify(out, null, 2));
+  });
+
+  function download(filename, mime, content) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+    a.download = filename;
+    a.click();
+  }
+</script>
+</body>
+</html>

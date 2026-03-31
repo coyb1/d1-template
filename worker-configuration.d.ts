@@ -7,6 +7,10 @@ declare namespace Cloudflare {
 	}
 	interface Env {
 		DB: D1Database;
+		OPENAI_API_KEY: string;
+		GEMINI_API_KEY: string;
+		GROK_API_KEY: string;
+		ANTHROPIC_API_KEY: string;
 	}
 }
 interface Env extends Cloudflare.Env {}
